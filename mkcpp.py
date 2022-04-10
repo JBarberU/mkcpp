@@ -98,7 +98,7 @@ def gen_cpp(namespace=None, class_=None, file_=None, license=None):
 
     return ret
 
-def resolve_cmakelists(directory, filename):
+def resolve_cmakelists(directory, filename, header_only):
     import re
     lines = []
     insert_point = None
@@ -111,17 +111,27 @@ def resolve_cmakelists(directory, filename):
         lines = f.readlines()
 
     def add_block(lines, pattern, type_, file_ext):
+        start = -1
         for i, l in enumerate(lines):
-            m = re.search('(?<=set\()\w*' + pattern + '\w*', l)
-            if m:
-                print('Got a match: {}'.format(m.group(0)))
-                if input('Add {} to this block?: [Y/N]: '.format(type_)) in 'yY':
-                    ws = re.search('(?<=^)\s*', lines[i+1])
-                    lines = lines[:i+1] + ['{}{}/{}.{}\n'.format(ws.group(0) if ws else '', directory, filename, file_ext)] + lines[i+1:]
+            if start > 0:
+                m = re.search('\)', l)
+                if m:
+                    end = i
                     break
-        return lines
+            else:
+                m = re.search('(?<=set\()\w*' + pattern + '\w*', l)
+                if m:
+                    print('Got a match: {}'.format(m.group(0)))
+                    if input('Add {} to this block?: [Y/N]: '.format(type_)) in 'yY':
+                        start = i
 
-    lines = add_block(lines, 'SRC', 'source', 'cpp')
+        l2 = list(set(lines[start+1:end] + ['    {}/{}.{}\n'.format(directory, filename, file_ext)]))
+        l2.sort()
+        ret = lines[:start+1] + l2 + lines[end:]
+        return ret
+
+    if not header_only:
+        lines = add_block(lines, 'SRC', 'source', 'cpp')
     lines = add_block(lines, 'HEADER', 'header', 'h')
 
     with open('CMakeLists.txt', 'w') as f:
@@ -138,7 +148,7 @@ def main(args):
     parser.add_argument('--header', action='store_true', help='Creates only a header')
     parser.add_argument('-c', '--class', dest='class_', help='ClassName')
     parser.add_argument('-n', '--namespace' , help='Name of namespace to use')
-    parser.add_argument('--file-name' , help='Base for the filename (foobar -> foobar.{h,cpp})')
+    parser.add_argument('--file-name', '--fn' , help='Base for the filename (foobar -> foobar.{h,cpp})')
     parser.add_argument('-o', '--output' , help='Directory in which to create the file(s)')
     args = parser.parse_args()
 
@@ -154,16 +164,16 @@ def main(args):
         raise RuntimeError('No file-name given')
 
     h = gen_header(namespace=args.namespace, class_=args.class_, license=license)
-    c = gen_cpp(namespace=args.namespace, class_=args.class_, license=license, file_=args.file_name)
-
     with open('{}/{}.h'.format(path, args.file_name), 'w') as f:
         f.write(h)
 
-    with open('{}/{}.cpp'.format(path, args.file_name), 'w') as f:
-        f.write(c)
+    if not args.header:
+        c = gen_cpp(namespace=args.namespace, class_=args.class_, license=license, file_=args.file_name)
+        with open('{}/{}.cpp'.format(path, args.file_name), 'w') as f:
+            f.write(c)
 
     if os.path.exists('CMakeLists.txt'):
-        resolve_cmakelists(path, args.file_name)
+        resolve_cmakelists(path, args.file_name, args.header)
 
 if __name__ == '__main__':
     import sys
