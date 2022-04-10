@@ -144,8 +144,11 @@ def main(args):
 
     license = gen_license()
 
-    if args.output is None or not os.path.isdir(args.output):
-        raise RuntimeError('The given path doesn\'t exist! ({})'.format(args.output))
+    path = args.output
+    if path is None or not os.path.isdir(path):
+        raise RuntimeError('The given path doesn\'t exist! ({})'.format(path))
+
+    path = path[:-1] if path[-1] == '/' else path
 
     if not args.file_name:
         raise RuntimeError('No file-name given')
@@ -153,14 +156,14 @@ def main(args):
     h = gen_header(namespace=args.namespace, class_=args.class_, license=license)
     c = gen_cpp(namespace=args.namespace, class_=args.class_, license=license, file_=args.file_name)
 
-    with open('{}/{}.h'.format(args.output, args.file_name), 'w') as f:
+    with open('{}/{}.h'.format(path, args.file_name), 'w') as f:
         f.write(h)
 
-    with open('{}/{}.cpp'.format(args.output, args.file_name), 'w') as f:
+    with open('{}/{}.cpp'.format(path, args.file_name), 'w') as f:
         f.write(c)
 
     if os.path.exists('CMakeLists.txt'):
-        resolve_cmakelists(args.output, args.file_name)
+        resolve_cmakelists(path, args.file_name)
 
 if __name__ == '__main__':
     import sys
